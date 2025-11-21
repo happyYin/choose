@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今天吃什麼？ - 餐廳轉盤</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 自定義 Tailwind 配置 */
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-red': '#EF4444', /* 鮮豔的紅色 */
+                        'primary-yellow': '#FBBF24', /* 鮮豔的黃色 */
+                        'primary-blue': '#3B82F6', /* 鮮豔的藍色 */
+                        'bg-light': '#FEF3C7', /* 淺黃色背景 */
+                    }
+                }
+            }
+        }
+        /* 轉盤容器的樣式，用於定位指針 */
+        #wheel-container {
+            position: relative;
+        }
+
+        /* 轉盤指針樣式 */
+        #pointer {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, -100%); /* 定位在轉盤上方中央 */
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #EF4444; /* 紅色三角形 */
+            z-index: 10;
+        }
+
+        /* 轉盤動畫類別 */
+        .spin {
+            /* 設定動畫時長和緩動函數 */
+            transition: transform 5s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        /* 旋轉結果的放大/光暈效果 */
+        .highlight {
+            animation: pulse-glow 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            from {
+                transform: scale(1);
+                box-shadow: 0 0 5px rgba(251, 191, 36, 0.4);
+            }
+            to {
+                transform: scale(1.05);
+                box-shadow: 0 0 30px rgba(251, 191, 36, 0.8), 0 0 50px rgba(239, 68, 68, 0.6);
+            }
+        }
+
+        /* 隱藏扇區文字的溢出部分 */
+        .sector-text {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+    </style>
+</head>
+<body class="bg-bg-light min-h-screen p-4 sm:p-8 font-sans">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-5xl font-extrabold text-primary-red">
+                <span class="mr-2">🎲</span>今天吃什麼？
+            </h1>
+            <p class="text-xl text-gray-700 mt-2">
+                輸入餐廳或食物選項，讓命運為你決定！
+            </p>
+        </header>
+
+        <section class="mb-8 p-6 bg-white rounded-xl shadow-2xl border-4 border-primary-yellow">
+            <label for="options-input" class="block text-lg font-bold text-gray-800 mb-2">
+                🍜 輸入選項 (以逗號 "," 分隔)
+            </label>
+            <textarea id="options-input" rows="3"
+                class="w-full p-4 border-4 border-primary-blue rounded-lg text-lg focus:ring-4 focus:ring-primary-blue focus:border-primary-blue transition duration-200"
+                placeholder="例如：牛肉麵, 義大利麵, 壽司, 漢堡, 火鍋">
+牛肉麵, 炒飯, 壽司, 臭豆腐, 食安唯雞, 越南料理, 萬隆炭烤雞排
+            </textarea>
+            <p class="mt-2 text-sm text-gray-500">提示：至少輸入兩個選項才能運作。</p>
+        </section>
+
+        <main class="flex flex-col items-center">
+            <div id="wheel-container" class="mb-8 w-80 h-80 sm:w-96 sm:h-96 relative">
+                <div id="pointer"></div>
+
+                <svg id="wheel" viewBox="0 0 100 100" class="w-full h-full transform transition-transform duration-500 rounded-full shadow-2xl border-8 border-primary-red bg-white">
+                    </svg>
+            </div>
+
+            <div id="result-display" class="mb-8 p-4 w-full text-center min-h-[5rem]">
+                <p id="result-text" class="text-3xl sm:text-4xl font-black text-gray-800 transition duration-300">
+                    點擊按鈕開始！
+                </p>
+            </div>
+
+            <button id="spin-button"
+                class="px-12 py-4 text-2xl font-extrabold text-white bg-primary-red rounded-full shadow-xl hover:bg-red-600 active:bg-red-700 transition duration-150 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+                🍽️ 今天吃這個！
+            </button>
+        </main>
+
+        <footer class="mt-12 text-center text-sm text-gray-500">
+            <p>餐廳地點選擇轉盤 | Pure JS + Tailwind CSS</p>
+        </footer>
+    </div>
+
+    <script>
+        const inputElement = document.getElementById('options-input');
+        const wheelSvg = document.getElementById('wheel');
+        const spinButton = document.getElementById('spin-button');
+        const resultText = document.getElementById('result-text');
+
+        // 定義轉盤顏色（高飽和度）
+        const colors = [
+			'#EF4444', // 鮮紅色 (Primary Red, ex: 番茄)
+            '#FBBF24', // 鮮黃色 (Primary Yellow, ex: 檸檬/玉米)
+            '#3B82F6', // 鮮藍色 (Primary Blue, ex: 藍莓/飲料)
+            '#10B981', // 翡翠綠 (Emerald Green, ex: 蔬菜)
+            '#EC4899', // 亮粉色 (Pink, ex: 草莓/甜點)
+            '#8B5CF6', // 紫羅蘭 (Violet, ex: 茄子/葡萄)
+            '#F97316', // 橘色 (Orange, ex: 柑橘/南瓜)
+            '#65A30D', // 橄欖綠 (Olive Green, ex: 酪梨/橄欖)
+            '#06B6D4', // 青色 (Cyan, ex: 薄荷/清爽)
+            '#7C3AED', // 深紫 (Deep Purple)
+            '#BE185D', // 莓果紅 (Berry Red)
+            '#D97706', // 金色 (Gold/Brownish Yellow, ex: 烤麵包)
+        ];
+
+        let options = [];
+        let isSpinning = false;
+        let rotation = 0; // 記錄當前總旋轉角度
+
+        /**
+         * 1. 根據輸入框內容重新繪製轉盤
+         */
+        function drawWheel() {
+            // 移除舊的 highlighting
+            resultText.textContent = '點擊按鈕開始！';
+            resultText.classList.remove('text-primary-red', 'highlight');
+            
+            // 處理選項
+            const inputText = inputElement.value.trim();
+            options = inputText.split(',').map(item => item.trim()).filter(item => item.length > 0);
+            
+            if (options.length === 0) {
+                wheelSvg.innerHTML = '';
+                spinButton.disabled = true;
+                return;
+            }
+            
+            spinButton.disabled = isSpinning;
+            
+            const numOptions = options.length;
+            const anglePerOption = 360 / numOptions;
+            wheelSvg.innerHTML = ''; // 清空舊內容
+
+            options.forEach((option, index) => {
+                const startAngle = index * anglePerOption;
+                const endAngle = (index + 1) * anglePerOption;
+                const midAngle = startAngle + anglePerOption / 2;
+                const color = colors[index % colors.length];
+
+                // SVG Path for a sector (使用簡單的 Pie Chart 扇形路徑)
+                // 半徑 R = 50, 中心點 (50, 50)
+                const R = 50;
+                const centerX = 50;
+                const centerY = 50;
+
+                // 角度轉弧度
+                const toRad = (angle) => angle * Math.PI / 180;
+
+                // 計算扇形邊界點座標
+                const x1 = centerX + R * Math.cos(toRad(startAngle - 90));
+                const y1 = centerY + R * Math.sin(toRad(startAngle - 90));
+                const x2 = centerX + R * Math.cos(toRad(endAngle - 90));
+                const y2 = centerY + R * Math.sin(toRad(endAngle - 90));
+
+                const largeArcFlag = anglePerOption > 180 ? 1 : 0;
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute('d', `
+                    M ${centerX} ${centerY}
+                    L ${x1} ${y1}
+                    A ${R} ${R} 0 ${largeArcFlag} 1 ${x2} ${y2}
+                    Z
+                `);
+                path.setAttribute('fill', color);
+                path.setAttribute('stroke', 'white');
+                path.setAttribute('stroke-width', '0.5');
+                path.classList.add('wheel-sector');
+                path.dataset.option = option;
+                path.dataset.index = index;
+                wheelSvg.appendChild(path);
+
+                // 扇區文字
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                const textX = centerX + (R * 0.7) * Math.cos(toRad(midAngle - 90));
+                const textY = centerY + (R * 0.7) * Math.sin(toRad(midAngle - 90));
+                
+                // 讓文字面向外
+                const textRotation = midAngle + 90; 
+
+                text.setAttribute('x', textX);
+                text.setAttribute('y', textY);
+                text.setAttribute('transform', `rotate(${textRotation}, ${textX}, ${textY})`);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', 'white');
+                text.setAttribute('font-size', anglePerOption > 45 ? '4' : '3.5');
+                text.setAttribute('font-weight', 'bold');
+                text.classList.add('sector-text');
+                text.textContent = option.length > 8 ? option.substring(0, 8) + '...' : option;
+                wheelSvg.appendChild(text);
+            });
+            
+            // 確保轉盤在初始狀態
+            wheelSvg.style.transform = `rotate(${rotation}deg)`;
+        }
+
+        /**
+         * 2. 啟動旋轉邏輯
+         */
+        function spinWheel() {
+            if (isSpinning || options.length < 2) return;
+
+            isSpinning = true;
+            spinButton.disabled = true;
+            resultText.textContent = '🚀 旋轉中...';
+            resultText.classList.remove('text-primary-red', 'highlight');
+
+            const numOptions = options.length;
+            const anglePerOption = 360 / numOptions;
+
+            // 1. 選擇一個隨機結果的索引
+            const winningIndex = Math.floor(Math.random() * numOptions);
+            const winningOption = options[winningIndex];
+
+            // 2. 計算目標角度
+            // 轉盤的 0 度對應第一個選項的中線 (索引 0)
+            // 指針指向頂部 (0度)，所以我們希望贏家選項的**中線**在指針處。
+            // 贏家選項中線角度：(winningIndex * anglePerOption) + (anglePerOption / 2)
+            
+            // 我們需要旋轉的度數是： 360 - (贏家選項中線角度)
+            const winningAngle = (winningIndex * anglePerOption) + (anglePerOption / 2);
+            
+            // 考慮指針在 0 度，我們需要將 winningAngle 轉到 360 度 (完整一圈)
+            // 讓指針指向該選項： (360 - winningAngle) 
+            let targetAngle = 360 - winningAngle;
+            
+            // 3. 確保至少旋轉 5 圈 (1800度) 才能有明顯的減速動畫
+            const minRevolutions = 5;
+            targetAngle += (minRevolutions * 360); 
+
+            // 4. 加上一個隨機小偏移，讓每次停下的位置不完全一樣
+            targetAngle += (Math.random() * anglePerOption * 0.8) - (anglePerOption * 0.4); 
+
+            // 5. 執行 CSS 旋轉動畫
+            // 更新總旋轉角度
+            rotation += targetAngle; 
+            
+            // 添加 spin 類別以啟用 transition 效果 (5秒緩動)
+            wheelSvg.classList.add('spin'); 
+            wheelSvg.style.transform = `rotate(${rotation}deg)`;
+
+            // 6. 等待動畫結束 (5秒)
+            setTimeout(() => {
+                isSpinning = false;
+                spinButton.disabled = false;
+                wheelSvg.classList.remove('spin');
+                
+                // 確保 CSS transition 結束後，移除 spin class，但保留最終的 transform 屬性
+                wheelSvg.style.transform = `rotate(${rotation}deg)`; 
+                
+                // 顯示結果
+                resultText.textContent = `就是它了： ${winningOption}！`;
+                resultText.classList.add('text-primary-red', 'highlight');
+
+                // 高亮被選中的扇區
+                highlightSector(winningIndex);
+
+            }, 5000); // 與 CSS transition-duration 保持一致
+        }
+        
+        /**
+         * 3. 結果高亮顯示扇區
+         */
+        function highlightSector(index) {
+            // 先清除所有扇區的高亮
+            document.querySelectorAll('.wheel-sector').forEach(path => {
+                path.classList.remove('scale-105', 'shadow-xl'); // 移除可能的突出顯示
+            });
+            
+            // 針對贏家扇區進行高亮
+            const winnerSector = document.querySelector(`.wheel-sector[data-index="${index}"]`);
+            if (winnerSector) {
+                // SVG 元素較難直接使用 CSS 效果，這裡做一個簡單的顏色邊框突出
+                // 在本範例中，我們主要依賴 result-text 的放大/光暈效果來實現突出。
+                // 如果需要 SVG 內的視覺突出，可以調整其 stroke-width 或顏色，但這裡維持主要結果顯示在文字上。
+            }
+        }
+
+        /**
+         * 4. 事件監聽器
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始繪製
+            drawWheel(); 
+            
+            // 輸入框內容改變時重新繪製
+            inputElement.addEventListener('input', drawWheel);
+
+            // 按鈕點擊事件
+            spinButton.addEventListener('click', spinWheel);
+        });
+        
+    </script>
+</body>
+</html>
