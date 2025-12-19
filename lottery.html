@@ -1,0 +1,411 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>透明球抽獎（馬卡龍柔和色系｜v2.16）</title>
+<style>
+  :root{
+    /* 背景（維持 v2.7 馬卡龍柔和） */
+    --bg-top:#f0f7ff; --bg-mid:#eafaf4; --bg-bottom:#f7f3ff;
+    --text:#2b2b2b; --panel:rgba(255,255,255,.58);
+
+    /* 馬卡龍主色盤（小球、彩帶、按鈕） */
+    --mac-pink:#FFD1DC; --mac-peach:#FFCEB3; --mac-coral:#FFC4B2;
+    --mac-yellow:#FFF3B0; --mac-mint:#C8F7DC; --mac-lime:#D8F7C5;
+    --mac-sky:#AEE2FF; --mac-lavender:#E5D4FF; --mac-aqua:#D6F4F4;
+
+    /* 大球光影（沿用 v2.14 無內圈設定） */
+    --sphere-inner-light: rgba(255,255,255,.16);
+    --sphere-inner-mid:   rgba(160,190,240,.24);
+    --sphere-inner-edge:  rgba(100,140,180,.32);
+    --sphere-edge-outer:  rgba(90,130,160,.22);
+  }
+
+  html,body{
+    height:100%; margin:0;
+    font-family:"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    color:var(--text);
+    background: radial-gradient(1200px 800px at 50% 0%, var(--bg-top) 0%, var(--bg-mid) 55%, var(--bg-bottom) 100%);
+  }
+
+  .wrap{max-width:1100px; margin:24px auto; padding:0 16px;}
+  .brand{ text-align:center; font-weight:900; font-size:26px; margin:0 0 16px; color:#333; }
+
+  header{display:flex; flex-direction:column; gap:8px; align-items:center; margin-bottom:12px;}
+  .controls{display:flex; flex-wrap:wrap; gap:10px; justify-content:center; width:100%;}
+  .controls .field,.controls .toggle{
+    display:flex; gap:6px; align-items:center;
+    background: var(--panel); padding:8px 12px; border-radius:14px; border:1px solid rgba(0,0,0,.08);
+    backdrop-filter: blur(6px);
+  }
+  .controls input{
+    width:90px; padding:6px 8px; border-radius:10px; border:1px solid rgba(0,0,0,.12);
+    background: rgba(255,255,255,.94); color:#333; font-weight:700; text-align:center; outline:none;
+  }
+
+  /* 按鈕（醒目、馬卡龍漸層） */
+  button{
+    appearance:none; border:2px solid #5fbef0; padding:10px 18px; border-radius:16px;
+    font-weight:900; font-size:16px; cursor:pointer; color:#16323a;
+    background: linear-gradient(135deg, var(--mac-sky), var(--mac-mint));
+    box-shadow: 0 12px 28px rgba(70,130,160,.35), inset 0 0 14px rgba(255,255,255,.95);
+    transition: transform .08s ease, filter .08s ease, box-shadow .08s ease;
+  }
+  button:hover:not(:disabled){ transform: translateY(-2px); box-shadow: 0 14px 32px rgba(70,130,160,.42), inset 0 0 16px rgba(255,255,255,1); }
+  button.secondary{
+    background: linear-gradient(135deg, var(--mac-yellow), var(--mac-pink));
+    border:2px solid #f7a9c6;
+    box-shadow: 0 12px 28px rgba(190,120,140,.30), inset 0 0 14px rgba(255,255,255,.95);
+    color:#3a2b2b;
+  }
+  button:disabled{filter:grayscale(.25) brightness(.95); cursor:not-allowed;}
+  .status{text-align:center; margin-top:8px;}
+  #resultArea{text-align:center; margin-top:12px; font-weight:800; color:#2f2f2f;}
+
+  .stage{
+    position:relative; background: var(--panel);
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius:16px;
+    box-shadow: 0 10px 30px rgba(40,60,80,.16), inset 0 0 60px rgba(255,255,255,.22);
+    padding:12px; display:grid; grid-template-columns: minmax(480px, 1fr) 320px; gap:12px;
+    backdrop-filter: blur(4px) saturate(1.05);
+  }
+
+  .picked{
+    position:absolute; top:-14px; left:12px; right:12px; display:flex; gap:10px; justify-content:center; z-index:10;
+  }
+  .badge{
+    min-width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-weight:900; font-size:22px; color:#1e1e1e;
+    background: radial-gradient(60% 60% at 50% 40%, #fff 0%, #fdf9ff 55%, #f3eefc 100%);
+    box-shadow: 0 6px 18px rgba(120,120,120,.28), inset 0 -8px 18px rgba(255,255,255,.62);
+    transform: translateY(-20px) scale(.2); opacity:0;
+    animation: dropIn .6s ease forwards;
+  }
+  @keyframes dropIn{ 0%{transform:translateY(-20px) scale(.2); opacity:0;} 60%{transform:translateY(6px) scale(1.06); opacity:1;} 100%{transform:translateY(0) scale(1); opacity:1;} }
+
+  canvas{width:100%; height:640px; border-radius:12px; display:block; background: transparent;}
+
+  .side{
+    background: linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.62));
+    border:1px solid rgba(0,0,0,.08); border-radius:12px; padding:12px; color:#2f2f2f;
+    backdrop-filter: blur(4px);
+  }
+
+  /* ✅ 抽獎規則內容：自動換行＋間距＋對齊 */
+  .side .list{
+    display:flex;
+    flex-wrap:wrap;         /* 允許換行 */
+    column-gap:10px;        /* 水平間距 */
+    row-gap:10px;           /* 垂直間距 */
+    justify-content:flex-start;
+    align-items:flex-start;
+  }
+  .chip{
+    padding:6px 10px; border-radius:999px; font-weight:700; font-size:13px;
+    background: rgba(255,255,255,.92); border:1px solid rgba(0,0,0,.08); color:#333;
+    flex: 0 0 auto;          /* chip 固定內容寬度，不被拉伸 */
+    min-width: 140px;        /* 每個 chip 的最小寬度，避免太短造成擠壓 */
+    text-align:center;       /* 置中顯示 */
+    white-space: nowrap;     /* 避免單一 chip 的文字換行 */
+  }
+
+  /* 響應式：手機寬度時，讓 chip 更容易換行，維持可讀性 */
+  @media (max-width: 640px){
+    .stage{ grid-template-columns: 1fr; }     /* 右側面板改到下方 */
+    .chip{ min-width: 44%; }                  /* 一列最多 2 個，留間距 */
+    .controls .field{ flex-wrap:wrap; }       /* 控制列在窄螢幕時更容易排版 */
+  }
+  
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="brand">透明球抽獎</h1>
+
+  <header>
+    <div class="controls">
+      <div class="field">
+        <label for="minInput">範圍：從</label>
+        <input id="minInput" type="number" placeholder="1" value="1" min="1" />
+        <label for="maxInput">到</label>
+        <input id="maxInput" type="number" placeholder="42" value="42" min="1" />
+      </div>
+      <div class="field">
+        <label for="countInput">抽出數量</label>
+        <input id="countInput" type="number" placeholder="6" value="6" min="1" />
+      </div>
+      <div class="toggle">
+        <!-- 預設不啟用音效 -->
+        <input id="sfxToggle" type="checkbox" />
+        <label for="sfxToggle">啟用音效</label>
+      </div>
+      <button id="btnStart" type="button">開始抽獎</button>
+      <button id="btnReset" type="button" class="secondary" disabled>再抽一次</button>
+    </div>
+
+    <div class="status" id="status">準備就緒</div>
+    <div id="resultArea"></div>
+  </header>
+
+  <div class="stage">
+    <div class="picked" id="pickedBar"></div>
+    <canvas id="stage"></canvas>
+
+    <div class="side">
+      <h3>抽獎規則</h3>
+      <div class="list">
+        <span class="chip">自訂範圍（例：1–42）</span>
+        <span class="chip">不重複</span>
+        <span class="chip">一次抽出自訂個數</span>
+        <span class="chip">逐一揭示；音效可開/關</span>
+        <span class="chip">結果顯示在按鈕下一列</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== 參數 ===================== */
+const cfg = { min:1, max:42, pickCount:6, revealDelayMs:900, preRollSec:2.0, ballCountInSphere:26, gravity:0.03, bounce:0.92, friction:0.996 };
+let sfxEnabled = false; // ✅ 預設關閉音效
+
+/* ===================== DOM ===================== */
+const statusEl=document.getElementById('status'), stateText=document.getElementById('stateText'), resultArea=document.getElementById('resultArea');
+const pickedBar=document.getElementById('pickedBar'), btnStart=document.getElementById('btnStart'), btnReset=document.getElementById('btnReset');
+const minInput=document.getElementById('minInput'), maxInput=document.getElementById('maxInput'), countInput=document.getElementById('countInput'), sfxToggle=document.getElementById('sfxToggle');
+const canvas=document.getElementById('stage'); const ctx=canvas.getContext('2d'); let W,H,dpr, running=false;
+
+/* ===================== 驗證與狀態 ===================== */
+function setStatus(t){ statusEl.textContent=t; if(stateText) stateText.textContent=t; }
+function parseAndValidate(){
+  const min=Math.floor(Number(minInput.value||1));
+  const max=Math.floor(Number(maxInput.value||42));
+  const cnt=Math.floor(Number(countInput.value||6));
+  if(!Number.isInteger(min)||!Number.isInteger(max)||!Number.isInteger(cnt)) throw new Error('請輸入整數。');
+  if(min<1||max<1) throw new Error('範圍需為正整數。');
+  if(max<min) throw new Error('上限需大於或等於下限。');
+  const size=max-min+1;
+  if(cnt<1) throw new Error('抽出數量需 ≥ 1。');
+  if(cnt>size) throw new Error(`抽出數量不可超過範圍大小（目前範圍共有 ${size} 個號碼）。`);
+  cfg.min=min; cfg.max=max; cfg.pickCount=cnt;
+}
+
+/* ===================== 畫布尺寸 ===================== */
+function resize(){
+  dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  const rect=canvas.getBoundingClientRect(); let cssW=Math.floor(rect.width), cssH=Math.floor(rect.height);
+  if(!cssW||cssW<50) cssW=Math.floor((document.querySelector('.stage')?.clientWidth||window.innerWidth)-340);
+  if(!cssH||cssH<200) cssH=640;
+  if(cssW<200){ canvas.style.width='800px'; canvas.style.height='640px'; cssW=800; cssH=640; }
+  canvas.width=Math.floor(cssW*dpr); canvas.height=Math.floor(cssH*dpr);
+  W=canvas.width; H=canvas.height;
+  setSphere();
+}
+
+/* ===================== 音效 ===================== */
+let AC, masterGain;
+function initAudio(){
+  if(!sfxEnabled) return;
+  if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); masterGain=AC.createGain(); masterGain.gain.value=0.28; masterGain.connect(AC.destination); }
+  if(AC.state==='suspended'){ AC.resume().catch(()=>{}); }
+}
+function playBeep(freq=660, dur=0.18, type='square', vol=0.25){ if(!sfxEnabled||!AC) return; const osc=AC.createOscillator(); const gain=AC.createGain(); osc.type=type; osc.frequency.value=freq; gain.gain.value=vol; osc.connect(gain); gain.connect(masterGain); osc.start(); osc.stop(AC.currentTime+dur); }
+function drumroll(sec=2.0){
+  if(!sfxEnabled||!AC) return;
+  const noise=AC.createBufferSource(); const buf=AC.createBuffer(1, AC.sampleRate*sec, AC.sampleRate);
+  const data=buf.getChannelData(0); for(let i=0;i<data.length;i++){ data[i]=(Math.random()*2-1)*(1-i/data.length); }
+  noise.buffer=buf; const filt=AC.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value=220; const gain=AC.createGain(); gain.gain.value=0.5;
+  noise.connect(filt); filt.connect(gain); gain.connect(masterGain); noise.start();
+}
+function popSound(){ playBeep(880,.12,'sine',0.32); }
+function sparkle(){ playBeep(1200,.06,'triangle',.22); setTimeout(()=>playBeep(1600,.06,'triangle',.22),60); setTimeout(()=>playBeep(2000,.06,'triangle',.22),120); }
+
+/* ===================== 物理與渲染 ===================== */
+const sphere={cx:0, cy:0, r:0}; let balls=[];
+function setSphere(){ sphere.cx=W*0.45; sphere.cy=H*0.54; sphere.r=Math.min(W,H)*0.32; }
+function rand(min,max){ return Math.random()*(max-min)+min; }
+function choice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+/* 馬卡龍色盤（小球） */
+const PALETTE=['#FFD1DC','#FFCEB3','#FFC4B2','#FFF3B0','#C8F7DC','#D8F7C5','#CFE9FF','#E5D4FF','#D6F4F4'];
+function makeColor(){ return choice(PALETTE); }
+
+/* 色碼工具（邊框融合用） */
+function hexToRgb(hex){ hex=hex.replace('#',''); if(hex.length===3){ hex=hex.split('').map(c=>c+c).join(''); } const num=parseInt(hex,16); return { r:(num>>16)&255, g:(num>>8)&255, b:num&255 }; }
+function rgbToHex({r,g,b}){ const h=n=>n.toString(16).padStart(2,'0'); return `#${h(Math.max(0,Math.min(255,r)))}${h(Math.max(0,Math.min(255,g)))}${h(Math.max(0,Math.min(255,b)))}`; }
+function darken(hex, amount=0.25){ const {r,g,b}=hexToRgb(hex); return rgbToHex({ r:r*(1-amount), g:g*(1-amount), b:b*(1-amount) }); }
+function mix(hex, toHex, ratio=0.5){ const a=hexToRgb(hex), b=hexToRgb(toHex); return rgbToHex({ r:a.r*(1-ratio)+b.r*ratio, g:a.g*(1-ratio)+b.g*ratio, b:a.b*(1-ratio)+b.b*ratio }); }
+function hexBorder(hex, alpha=0.8){ const {r,g,b}=hexToRgb(hex); return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${alpha})`; }
+
+function initBalls(){
+  if(!sphere.r||!sphere.cx||!sphere.cy) setSphere();
+  balls=[]; const rnd=()=>Math.floor(rand(cfg.min, cfg.max+1));
+  while(balls.length<cfg.ballCountInSphere){
+    const ang=rand(0,Math.PI*2), rad=rand(0, sphere.r-24), x=sphere.cx+Math.cos(ang)*rad, y=sphere.cy+Math.sin(ang)*rad;
+    const color = makeColor();
+    // 為每顆球預先計算「融合邊框色」
+    const borderBase = darken(color, 0.35);                // 基於球色加深
+    const borderBlend = mix(borderBase, '#2e3a46', 0.4);   // 與深灰藍混合，提升對比但保留色調
+    balls.push({x,y,vx:rand(-2,2),vy:rand(-2,2),n:rnd(),color, r:18+rand(-3,4), border: borderBlend});
+  }
+}
+
+function physicsStep(){
+  for(const b of balls){
+    b.vy+=cfg.gravity; b.x+=b.vx; b.y+=b.vy;
+    const dx=b.x-sphere.cx, dy=b.y-sphere.cy, dist=Math.sqrt(dx*dx+dy*dy), lim=sphere.r-b.r;
+    if(dist>lim){
+      const nx=dx/dist, ny=dy/dist;
+      b.x=sphere.cx+nx*lim; b.y=sphere.cy+ny*lim;
+      const vDotN=b.vx*nx+b.vy*ny;
+      b.vx-=(1+cfg.bounce)*vDotN*nx; b.vy-=(1+cfg.bounce)*vDotN*ny;
+      b.vx*=cfg.friction; b.vy*=cfg.friction;
+    }
+  }
+}
+
+/* 背景柔光＋輕雜訊 */
+function drawNaturalBackdrop(){
+  const g=ctx.createRadialGradient(W*0.5, H*0.15, 10, W*0.5, H*0.65, Math.max(W,H)*0.8);
+  g.addColorStop(0,'rgba(200,235,255,.22)'); g.addColorStop(0.6,'rgba(180,240,230,.16)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.globalAlpha=0.042;
+  for(let i=0;i<180;i++){ const x=Math.random()*W, y=Math.random()*H, r=Math.random()*2.1+0.5; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=`rgba(255,255,255,${Math.random()*0.8})`; ctx.fill(); }
+  ctx.restore();
+}
+
+/* 大球：沿用 v2.14（無內圈、光影塑形＋柔和邊線） */
+function drawSphere(){
+  const glow=ctx.createRadialGradient(sphere.cx, sphere.cy, sphere.r*0.1, sphere.cx, sphere.cy, sphere.r*1.22);
+  glow.addColorStop(0,'rgba(220,245,255,.10)'); glow.addColorStop(1,'rgba(220,245,255,0)');
+  ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(sphere.cx, sphere.cy, sphere.r*1.14, 0, Math.PI*2); ctx.fill();
+
+  const innerGradient=ctx.createRadialGradient(sphere.cx, sphere.cy, sphere.r*0.12, sphere.cx, sphere.cy, sphere.r);
+  innerGradient.addColorStop(0,  getCSS('--sphere-inner-light')  || 'rgba(255,255,255,.16)');
+  innerGradient.addColorStop(0.6, getCSS('--sphere-inner-mid')    || 'rgba(160,190,240,.24)');
+  innerGradient.addColorStop(1,  getCSS('--sphere-inner-edge')   || 'rgba(100,140,180,.32)');
+  ctx.fillStyle=innerGradient; ctx.beginPath(); ctx.arc(sphere.cx, sphere.cy, sphere.r, 0, Math.PI*2); ctx.fill();
+
+  // 上方小圓高光
+  ctx.save(); ctx.globalAlpha=0.26; ctx.beginPath();
+  ctx.arc(sphere.cx - sphere.r*0.28, sphere.cy - sphere.r*0.42, sphere.r*0.14, 0, Math.PI*2);
+  const hl=ctx.createRadialGradient(sphere.cx - sphere.r*0.28, sphere.cy - sphere.r*0.42, 0, sphere.cx - sphere.r*0.28, sphere.cy - sphere.r*0.42, sphere.r*0.14);
+  hl.addColorStop(0,'rgba(255,255,255,.95)'); hl.addColorStop(1,'rgba(255,255,255,0)'); ctx.fillStyle=hl; ctx.fill(); ctx.restore();
+
+  // 右上細長弧形亮帶
+  ctx.save(); ctx.globalAlpha=0.18; ctx.beginPath();
+  ctx.ellipse(sphere.cx + sphere.r*0.10, sphere.cy - sphere.r*0.35, sphere.r*0.40, sphere.r*0.12, 0.35, 0, Math.PI*2);
+  const arcGlow=ctx.createLinearGradient(sphere.cx, sphere.cy - sphere.r*0.47, sphere.cx, sphere.cy - sphere.r*0.23);
+  arcGlow.addColorStop(0,'rgba(255,255,255,.90)'); arcGlow.addColorStop(1,'rgba(255,255,255,0)'); ctx.fillStyle=arcGlow; ctx.fill(); ctx.restore();
+
+  // 底部內陰影（立體感）
+  ctx.save(); ctx.globalAlpha=0.14; ctx.beginPath();
+  ctx.arc(sphere.cx, sphere.cy + sphere.r*0.20, sphere.r*0.85, 0, Math.PI*2);
+  const innerShade=ctx.createRadialGradient(sphere.cx, sphere.cy + sphere.r*0.20, sphere.r*0.45, sphere.cx, sphere.cy + sphere.r*0.20, sphere.r*0.85);
+  innerShade.addColorStop(0,'rgba(0,0,0,.24)'); innerShade.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=innerShade; ctx.fill(); ctx.restore();
+
+  // 柔和邊線（徑向漸層描邊）
+  const edgeGrad=ctx.createRadialGradient(sphere.cx, sphere.cy, sphere.r*0.86, sphere.cx, sphere.cy, sphere.r*1.02);
+  edgeGrad.addColorStop(0,'rgba(90,130,160,0)');
+  edgeGrad.addColorStop(1, getCSS('--sphere-edge-outer') || 'rgba(90,130,160,.22)');
+  ctx.strokeStyle=edgeGrad; ctx.lineWidth=1.2 * (window.devicePixelRatio||1);
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath(); ctx.arc(sphere.cx, sphere.cy, sphere.r, 0, Math.PI*2); ctx.stroke();
+}
+function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
+
+/* 小球：馬卡龍漸層；邊框加強且融合；字清晰 */
+function drawBalls(){
+  for(const b of balls){
+    const grad=ctx.createRadialGradient(b.x - b.r*0.35, b.y - b.r*0.35, 2, b.x, b.y, b.r);
+    grad.addColorStop(0,'#ffffff');       // 中心亮
+    grad.addColorStop(0.5,b.color);       // 馬卡龍色
+    grad.addColorStop(1,'#e6e6e6');       // 邊緣柔灰
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+
+    /* 邊框加強且融合：徑向漸層描邊 + 適度線寬 + 陰影 */
+    const borderGrad = ctx.createRadialGradient(b.x, b.y, b.r*0.60, b.x, b.y, b.r);
+    borderGrad.addColorStop(0, 'rgba(0,0,0,0)');                // 內側透明
+    borderGrad.addColorStop(1, hexBorder(b.border, 0.80));      // 外側半透明深色（融合球色）
+    ctx.strokeStyle = borderGrad;
+    ctx.lineWidth = 0.5 * (window.devicePixelRatio||1);
+    ctx.shadowColor = hexBorder(b.border, 0.25);                // 柔和陰影
+    ctx.shadowBlur  = 3;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.stroke();
+
+    // 清理影子，不影響數字
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+
+    // 字：白描框 + 深色填字
+    ctx.font=`${Math.floor(b.r*1.05)}px "Segoe UI","Noto Sans TC",sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.lineWidth=3 * (window.devicePixelRatio||1); ctx.strokeStyle='rgba(255,255,255,.92)'; ctx.strokeText(String(b.n), b.x, b.y);
+    ctx.fillStyle='#1f2a33'; ctx.fillText(String(b.n), b.x, b.y);
+  }
+}
+
+/* 主迴圈 */
+let rafId;
+function loop(){ ctx.clearRect(0,0,W,H); drawNaturalBackdrop(); physicsStep(); drawSphere(); drawBalls(); rafId=requestAnimationFrame(loop); }
+
+/* ===================== 抽獎邏輯 ===================== */
+function uniqueRandoms(min,max,count){ const pool=Array.from({length:max-min+1},(_,i)=>min+i); for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; } return pool.slice(0,count); }
+let revealTimer=null, pickedNumbers=[];
+function clearPickedUI(){ pickedBar.innerHTML=''; }
+function addPickedBadge(n){ const el=document.createElement('div'); el.className='badge'; el.textContent=n; pickedBar.appendChild(el); }
+
+function confetti(x,y){
+  const parts=[], cnt=60;
+  for(let i=0;i<cnt;i++){ parts.push({ x,y, vx:rand(-3,3), vy:rand(-6,-1), life:rand(40,80),
+    c:PALETTE[Math.floor(Math.random()*PALETTE.length)], w:rand(2,5), h:rand(6,14), rot:rand(0,Math.PI*2), vr:rand(-.2,.2)}); }
+  let t=0; const draw=()=>{ ctx.save();
+    for(const p of parts){ p.vy+=0.08; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr; p.life--; ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.setTransform(1,0,0,1,0,0); }
+    ctx.restore(); t++; if(t<50) requestAnimationFrame(draw); };
+  requestAnimationFrame(draw);
+}
+
+/* 啟動抽獎（含防呆與音效 resume） */
+async function startDraw(){
+  if(running) return;
+  try{ parseAndValidate(); }catch(e){ alert(e.message); setStatus(`⚠️ ${e.message}`); return; }
+  running=true; btnStart.disabled=true; btnReset.disabled=true;
+  clearPickedUI(); pickedNumbers=[]; resultArea.innerHTML=''; setStatus('準備中…（音效可在上方開關）');
+  initAudio();
+  if(sfxEnabled) drumroll(cfg.preRollSec);
+  cfg.ballCountInSphere=28; initBalls(); if(!rafId) loop();
+  await new Promise(r=>setTimeout(r, cfg.preRollSec*1000));
+  setStatus(`開始抽取（${cfg.min}–${cfg.max}，抽 ${cfg.pickCount} 個）…`);
+  const draws=uniqueRandoms(cfg.min,cfg.max,cfg.pickCount); let i=0;
+  revealTimer=setInterval(()=>{ const n=draws[i++]; if(n==null){ clearInterval(revealTimer); finishDraw(); return; }
+    if(sfxEnabled){ popSound(); sparkle(); } addPickedBadge(n); pickedNumbers.push(n);
+    for(let k=0;k<3;k++){ balls[Math.floor(Math.random()*balls.length)].n=n; }
+    confetti(sphere.cx, sphere.cy - sphere.r);
+  }, cfg.revealDelayMs);
+}
+function finishDraw(){ const sorted=[...pickedNumbers].sort((a,b)=>a-b); setStatus(`抽獎完成：${sorted.join('、')}`); resultArea.innerHTML=`抽出結果（揭示順序）：<br><strong>${pickedNumbers.join('、')}</strong><br>排序後：<strong>${sorted.join('、')}</strong>`; btnReset.disabled=false; running=false; }
+function resetAll(){ clearInterval(revealTimer); setStatus('已重置，等待開始…'); btnStart.disabled=false; btnReset.disabled=true; clearPickedUI(); pickedNumbers=[]; resultArea.innerHTML=''; cfg.ballCountInSphere=26; initBalls(); if(!rafId) loop(); }
+
+/* 啟動保險：多端觸發＋自動重試 */
+let initTries=0;
+function kickstart(force=false){
+  resize(); initBalls(); if(!rafId) loop();
+  const rect=canvas.getBoundingClientRect();
+  if((rect.width<50||rect.height<200)&&initTries<10&&!force){ initTries++; setTimeout(()=>kickstart(),120); }
+}
+
+/* 事件綁定與初始化 */
+document.addEventListener('DOMContentLoaded', ()=>{
+  sfxToggle.addEventListener('change', ()=>{ sfxEnabled=sfxToggle.checked; setStatus(sfxEnabled?'音效：開啟':'音效：關閉'); });
+  btnStart.addEventListener('click', e=>{ e.preventDefault(); startDraw(); });
+  btnReset.addEventListener('click', e=>{ e.preventDefault(); resetAll(); });
+  kickstart();
+});
+window.addEventListener('resize', resize);
+window.addEventListener('load', ()=>kickstart(true));
+</script>
+</body>
+</
