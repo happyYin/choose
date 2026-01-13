@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>今天吃什麼？ - 餐廳轉盤專業版</title>
+    <title>選擇障礙轉盤</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         tailwind.config = {
@@ -56,12 +56,12 @@
     <div class="max-w-4xl mx-auto">
         <header class="text-center mb-8">
             <h1 class="text-5xl font-extrabold text-primary-red drop-shadow-sm">
-                🍕 今天吃什麼？
+                🎲 今天選什麼？ 😋
             </h1>
         </header>
 
         <section class="mb-8 p-6 bg-white rounded-xl shadow-xl border-4 border-primary-yellow">
-            <label class="block text-lg font-bold text-gray-800 mb-2">🍜 輸入選項 (以逗號分隔)</label>
+            <label class="block text-lg font-bold text-gray-800 mb-2">🤔 輸入選項 (以逗號"," 分隔)</label>
             <textarea id="options-input" rows="2"
                 class="w-full p-4 border-4 border-primary-blue rounded-lg text-lg focus:outline-none transition duration-200">
 牛肉麵, 炒飯, 壽司, 臭豆腐, 食安唯雞, 越南料理, 萬隆炭烤雞排</textarea>
@@ -159,7 +159,7 @@
             
             isSpinning = true;
             spinButton.disabled = true;
-            resultText.textContent = "美食抽取中...";
+            resultText.textContent = "隨機抽取中...";
             resultText.classList.remove('highlight', 'text-primary-red');
 
             // 重新啟動動畫效果
@@ -202,5 +202,6 @@
     </script>
 </body>
 </html>
+
 
 
