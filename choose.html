@@ -99,12 +99,17 @@
         const colors = ['#EF4444', '#FBBF24', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6', '#F97316', '#06B6D4'];
         
         let options = [];
-        let currentRotation = 0;
+        let currentRotation = 0; // 紀錄累積的角度
         let isSpinning = false;
 
         function drawWheel() {
             const inputText = inputElement.value.trim();
             options = inputText.split(',').map(item => item.trim()).filter(item => item.length > 0);
+            
+            // 重置：當使用者更改內容時，將轉盤歸零，避免第一次轉動異常
+            currentRotation = 0;
+            wheelSvg.style.transition = 'none'; // 暫時關閉動畫以進行重置
+            wheelSvg.style.transform = 'rotate(0deg)';
             
             if (options.length < 2) {
                 spinButton.disabled = true;
@@ -120,7 +125,6 @@
                 const startAngle = i * anglePerOption;
                 const endAngle = (i + 1) * anglePerOption;
                 
-                // 繪製扇區 (SVG 0度在3點鐘，所以減90度讓第一項從12點鐘開始)
                 const x1 = 50 + 50 * Math.cos(Math.PI * (startAngle - 90) / 180);
                 const y1 = 50 + 50 * Math.sin(Math.PI * (startAngle - 90) / 180);
                 const x2 = 50 + 50 * Math.cos(Math.PI * (endAngle - 90) / 180);
@@ -133,7 +137,6 @@
                 path.setAttribute('stroke-width', '0.5');
                 wheelSvg.appendChild(path);
 
-                // 繪製文字
                 const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
                 const textAngle = startAngle + anglePerOption / 2;
                 const tx = 50 + 35 * Math.cos(Math.PI * (textAngle - 90) / 180);
@@ -159,36 +162,44 @@
             resultText.textContent = "運勢抽取中...";
             resultText.classList.remove('highlight', 'text-primary-red');
 
-            // 隨機增加旋轉度數 (至少 5 圈 + 隨機角度)
-            const extraDegree = Math.floor(Math.random() * 360) + 1800;
-            currentRotation += extraDegree;
+            // 重新啟動動畫效果
+            wheelSvg.style.transition = 'transform 5s cubic-bezier(0.15, 0, 0.15, 1)';
+
+            // 增加隨機旋轉角度 (至少 5 圈 + 隨機角度)
+            const randomExtra = Math.floor(Math.random() * 360);
+            currentRotation += (1800 + randomExtra); 
             
             wheelSvg.style.transform = `rotate(${currentRotation}deg)`;
 
-            // 監聽動畫結束事件 (修正延遲問題)
-            wheelSvg.addEventListener('transitionend', () => {
+            // 監聽動畫結束
+            const onTransitionEnd = () => {
                 isSpinning = false;
                 spinButton.disabled = false;
 
-                // 計算結果 (修正不準問題)
-                // 12點鐘方向(指針)對應的是轉盤旋轉後的相對位移
+                // 精確計算結果：
+                // 1. 取得總角度除以 360 的餘數
                 const actualRotation = currentRotation % 360;
+                // 2. 由於轉盤是順時針轉，指針位置相對於轉盤是逆時針算回去
                 const anglePerOption = 360 / options.length;
-                
-                // 轉盤順時針轉，實際上指針指向的索引是 (360 - 旋轉角度)
                 const winningIndex = Math.floor(((360 - actualRotation % 360) % 360) / anglePerOption);
+                
                 const winner = options[winningIndex];
-
                 resultText.innerHTML = `就是它了：<span class="text-primary-red underline">${winner}</span>！`;
                 resultText.classList.add('highlight');
-            }, { once: true });
+                
+                // 移除監聽器避免重複觸發
+                wheelSvg.removeEventListener('transitionend', onTransitionEnd);
+            };
+
+            wheelSvg.addEventListener('transitionend', onTransitionEnd);
         }
 
         inputElement.addEventListener('input', drawWheel);
         spinButton.addEventListener('click', spin);
         
-        // 初始化
+        // 初始繪製
         drawWheel();
     </script>
 </body>
 </html>
+
